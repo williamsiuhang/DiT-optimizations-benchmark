@@ -1,0 +1,17 @@
+name: sd-benchmark
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - torch>=2.0
+    - torchaudio
+    - torchvision
+    - diffusers[torch]
+    - transformers
+    - tqdm
+    - scikit-learn
+    - scikit-image
+    - pillow
