@@ -1,4 +1,4 @@
-name: sd-benchmark
+name: DiT-optimizations
 channels:
   - pytorch
   - defaults
@@ -15,3 +15,5 @@ dependencies:
     - scikit-learn
     - scikit-image
     - pillow
+    - timm
+    - accelerate
