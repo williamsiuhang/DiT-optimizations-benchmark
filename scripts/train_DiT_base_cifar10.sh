@@ -7,8 +7,7 @@ if python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
     DiT/train.py \
       --model DiT-S/2 \
       --data-path data/cifar10/train \
-      --global-batch-size 256 \
-      --vae mse
+      --global-batch-size 256
 else
   echo "CUDA is not available. Please ensure a GPU is accessible or modify the training script for CPU support."
   exit 1
