@@ -20,6 +20,24 @@ pip3 install torch torchvision torchaudio
 # pip install torch==2.6 torchvision --index-url https://download.pytorch.org/whl/cu126
 
 echo "Setup 5: Downloading data."
-cd $TARGET_VOLUME && python scripts/download_cifar10.py
+echo "Do you want to download datasets? (1: CIFAR-10, 2: MSCOCO, 3: Skip)"
+read -p "Enter your choice: " choice
+
+case $choice in
+    1)
+        echo "Downloading CIFAR-10 dataset..."
+        cd $TARGET_VOLUME && python scripts/download_cifar10.py
+        ;;
+    2)
+        echo "Downloading MSCOCO dataset..."
+        cd $TARGET_VOLUME && python scripts/download_mscoco.py
+        ;;
+    3)
+        echo "Skipping dataset download."
+        ;;
+    *)
+        echo "Invalid choice. Skipping dataset download."
+        ;;
+esac
 
 echo "Setup complete! Your environment is now ready."
