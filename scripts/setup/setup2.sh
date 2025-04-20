@@ -33,6 +33,10 @@ case $choice in
         cd $TARGET_VOLUME && python scripts/download_mscoco.py
         ;;
     3)
+        echo "Downloading ImageNet dataset..."
+        cd $TARGET_VOLUME && python scripts/download_imagenet256.py
+        ;;
+    4)
         echo "Skipping dataset download."
         ;;
     *)
