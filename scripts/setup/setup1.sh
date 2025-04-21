@@ -17,4 +17,4 @@ rm ~/miniconda3/miniconda.sh
 . ~/.bashrc
 
 echo "Run 'source ~/.bashrc' manually to initialize the shell environment."
-echo "After that, run 'bash tmp/setup2.sh' to continue the setup process."
+echo "After that, run 'bash scripts/setup/setup2.sh' to continue the setup process."

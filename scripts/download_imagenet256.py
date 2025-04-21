@@ -1,10 +1,10 @@
 import os
 import kagglehub
 
-# TODO: Why is this saving in ~/.cache/kagglehub/datasets/dimensi0n/imagenet-256?
-
-# Directory to store the dataset
-data_dir = "data/imagenet256"
+# Set KAGGLEHUB_CACHE environment variable to change the cache directory
+project_dir = input("Enter the project directory of DiT-optimizations (default: ~): ").strip() or "~"
+data_dir = project_dir + "/data/imagenet256"
+os.environ["KAGGLEHUB_CACHE"] = project_dir + "/cache"
 
 # Download the ImageNet 256x256 dataset ============================
 def download_imagenet256(output_dir):
