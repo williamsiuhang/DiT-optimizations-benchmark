@@ -26,7 +26,10 @@ def find_model(model_name):
     assert os.path.isfile(model_name), f'Could not find DiT checkpoint at {model_name}'
     checkpoint = torch.load(model_name, map_location=lambda storage, loc: storage)
     if "ema" in checkpoint:  # supports checkpoints from train.py
-        checkpoint = checkpoint["ema"] if args.ema else checkpoint["model"]
+        if args.ema:
+            checkpoint = checkpoint["ema"] 
+        else:
+            checkpoint = checkpoint["model"]    
     return checkpoint
 
 def main(args):
@@ -75,7 +78,7 @@ def main(args):
     samples = vae.decode(samples / 0.18215).sample
 
     # Save and display images:
-    save_image(samples, "sample.png", nrow=4, normalize=True, value_range=(-1, 1))
+    save_image(samples, args.name + ".png", nrow=4, normalize=True, value_range=(-1, 1))
 
 
 if __name__ == "__main__":
@@ -90,5 +93,6 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", type=str, default=None,
                         help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
     parser.add_argument("--ema", action="store_true", help="Use EMA weights")
+    parser.add_argument("--name", type=str, default="sample")
     args = parser.parse_args()
     main(args)
