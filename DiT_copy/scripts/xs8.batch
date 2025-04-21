@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH -J PG-XS8                    # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 4 -C HX00
+#SBATCH --mem-per-gpu=8G                        # Memory per core
+#SBATCH -t 04:00:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+#SBATCH --mail-type=BEGIN,END,FAIL              # Mail preferences
+#SBATCH --mail-user=pganesan8@gatech.edu        # E-mail address for notifications
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+
+torchrun --nnodes=1 --nproc_per_node=4 train.py --data-path /home/hice1/pganesan8/scratch/imagenet --model DiT-XS/8 --epochs 100 --log-every 200 --ckpt-every 500 --num-workers 4

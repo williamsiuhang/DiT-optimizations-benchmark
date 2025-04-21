@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH -J PG-XS8                    # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 1
+#SBATCH --mem-per-gpu=8G                        # Memory per core
+#SBATCH -t 00:15:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+#SBATCH --mail-type=BEGIN,END,FAIL              # Mail preferences
+#SBATCH --mail-user=pganesan8@gatech.edu        # E-mail address for notifications
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+
+srun python sample.py --model DiT-XS/8 --image-size 256 --ckpt /home/hice1/pganesan8/scratch/results/002-DiT-XS-8/checkpoints/0010000.pt
