@@ -8,7 +8,7 @@ if python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
       --model DiT-S/4 \
       --data-path data/imagenet256 \
       --global-batch-size 256 \
-      --ckpt-every 1000 \
+      --ckpt-every 10000 \
       --num-classes 200
 else
   echo "CUDA is not available. Please ensure a GPU is accessible or modify the training script for CPU support."
