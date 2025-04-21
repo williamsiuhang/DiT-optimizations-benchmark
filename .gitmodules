@@ -1,3 +1,7 @@
 [submodule "DiT"]
-	path = DiT
+	path = external/DiT
 	url = https://github.com/facebookresearch/DiT.git
+	
+[submodule "fast-DiT"]
+	path = external/fast-DiT
+	url = https://github.com/chuanyangjin/fast-DiT.git
