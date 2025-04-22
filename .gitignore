@@ -1,5 +1,6 @@
 data/*
 !data/readme.md
+!data/imagenet256-map.json
 results
 
 .env
