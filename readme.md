@@ -9,6 +9,14 @@
 2. Create .env with your variables to be used in syncing scripts
 
 ```bash
+# PACE ICE
+PORT=22
+SSH_KEY_PATH=~/.ssh/id_rsa_ice
+USER=sho81                               # GATech username
+IP=ice                                   # Your ~/.ssh/config name for pace
+TARGET_VOLUME=/home/hice1/sho81/scratch  # Absolute path to scratch disk
+
+# Ubuntu / Linux
 PORT          = 22                                  # Port for SSH connection
 SSH_KEY_PATH  = ~/.ssh/ssh_for_instance_connection  # Path to SSH private key
 USER          = root                                # SSH username
