@@ -1,7 +1,10 @@
 data/*
 !data/readme.md
 !data/imagenet256-map.json
-results
+samples/*
+!samples/readme.md
+results/*
+!results/readme.md
 
 .env
 tmp/
