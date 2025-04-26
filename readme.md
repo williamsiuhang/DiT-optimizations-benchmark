@@ -2,6 +2,29 @@
 
 ## Installation
 
+### On PACE / ICE
+
+1. Login GlobalProject VPN
+
+2. Configure .ssh/config (optional), then add .env (reference .env.sample)
+
+3. Sync project content to remote (run from main project directory): `bash scripts/setup/sync_remote.sh`
+
+4. Load modules
+
+- `module load anaconda3`
+- `module load cuda`
+
+5. Create conda environment
+
+- `ssh ice`
+
+- `cd ~/scratch/DiT-optimizations-benchmark`
+
+- `conda env create --file environment.yml`
+
+- `conda activate DiT-optimizations`
+
 ### On remote ubuntu / linux
 
 1. Manually intall rsync on ubuntu: `apt update && apt install rsync`
@@ -9,13 +32,6 @@
 2. Create .env with your variables to be used in syncing scripts
 
 ```bash
-# PACE ICE
-PORT=22
-SSH_KEY_PATH=~/.ssh/id_rsa_ice
-USER=sho81                               # GATech username
-IP=ice                                   # Your ~/.ssh/config name for pace
-TARGET_VOLUME=/home/hice1/sho81/scratch  # Absolute path to scratch disk
-
 # Ubuntu / Linux
 PORT          = 22                                  # Port for SSH connection
 SSH_KEY_PATH  = ~/.ssh/ssh_for_instance_connection  # Path to SSH private key
@@ -24,24 +40,18 @@ IP            = 12.12.123                           # Remote server IP address
 TARGET_VOLUME = /workspace/                         # Directory on the remote server
 ```
 
+---
+
 3. Sync project content to remote: `bash scripts/setup/sync_remote.sh`
 
 4. SSH into instance, then run setup scripts
 
-`bash scripts/setup/setup1.sh` _installs miniconda_
+- `bash scripts/setup/ubuntu/setup1.sh` _installs miniconda_
 
-`source ~/.bashrc` _restart shell so miniconda works_
+- `source ~/.bashrc` _restart shell so miniconda works_
 
-`conda deactivate` _if it's in (base) after restarting_
+- `conda deactivate` _if it's in (base) after restarting_
 
-`bash scripts/setup/setup2.sh` _set up environment, download pytorch and datasets_
+- `bash scripts/setup/ubuntu/setup2.sh` _set up environment, download pytorch and datasets_
 
-### On local machine
-
-Create conda environment
-
-`conda env create --file environment.yml`
-
-## Sync local project directory to remote
-
-`bash scripts/setup/sync_remote.sh`
+- `conda activate DiT-optimizations`
