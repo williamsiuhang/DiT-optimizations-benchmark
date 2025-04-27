@@ -4,6 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../external/fast-DiT")))
+
 """
 Sample new images from a pre-trained DiT.
 """
@@ -17,7 +21,6 @@ from download import find_model
 from models import DiT_models
 import argparse
 import json
-
 
 def main(args):
     # Setup PyTorch:
@@ -45,7 +48,7 @@ def main(args):
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
     
     def mapToOriginalClassIDs(class_labels):
-        with open("../../data/imagenet256-map-to-original.json", "r") as f:
+        with open("data/imagenet256-map-to-original.json", "r") as f:
             mapping = json.load(f)
         # Map the class labels to the original class IDs
         return [mapping[str(label)] for label in class_labels]
@@ -56,6 +59,8 @@ def main(args):
     else:
         class_labels = [157] # Folder name / ID
         # class_labels = random.sample(range(1, 200), 8)
+        
+    print(f"Class labels: {class_labels}")
     class_labels = mapToOriginalClassIDs(class_labels) # Map the class labels to their original IDs
 
     # Create sampling noise:
@@ -93,6 +98,6 @@ if __name__ == "__main__":
                         help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
     parser.add_argument("--name", type=str, default="sample")
     parser.add_argument("--class-labels", type=str, default=None,
-                        help="Comma-separated list of class labels to condition the model with (default: [93,100,56,23,157,145,87,88]).")
+                        help="Comma-separated list of class labels to condition the model with")
     args = parser.parse_args()
     main(args)
