@@ -26,7 +26,7 @@ from time import time
 import argparse
 import logging
 import os
-from accelerate import Accelerator
+from accelerate import Accelerator, DistributedDataParallelKwargs
 
 from models import DiT_models
 from diffusion import create_diffusion
@@ -127,7 +127,12 @@ def main(args):
     assert torch.cuda.is_available(), "Training currently requires at least one GPU."
 
     # Setup accelerator:
-    accelerator = Accelerator()
+    ddp_handler = DistributedDataParallelKwargs(find_unused_parameters=True)
+
+    # Setup accelerator:
+    accelerator = Accelerator(
+      kwargs_handlers=[ddp_handler],
+    )
     device = accelerator.device
 
     # Setup an experiment folder:
@@ -175,6 +180,17 @@ def main(args):
     if accelerator.is_main_process:
         logger.info(f"Dataset contains {len(dataset):,} images ({args.feature_path})")
 
+    # RESUME: load checkpoint if --resume is passed
+    train_steps = 0
+    if args.resume is not None:
+        if accelerator.is_main_process:
+            logger.info(f"Resuming from checkpoint {args.resume}")
+        ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        model.load_state_dict(ckpt["model"])
+        ema.load_state_dict(ckpt["ema"])
+        opt.load_state_dict(ckpt["opt"])
+        train_steps = ckpt.get("train_steps", 0)
+
     # Prepare models for training:
     update_ema(ema, model, decay=0)  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
@@ -182,7 +198,6 @@ def main(args):
     model, opt, loader = accelerator.prepare(model, opt, loader)
 
     # Variables for monitoring/logging purposes:
-    train_steps = 0
     log_steps = 0
     running_loss = 0
     start_time = time()
@@ -232,7 +247,8 @@ def main(args):
                         "model": model.module.state_dict(),
                         "ema": ema.state_dict(),
                         "opt": opt.state_dict(),
-                        "args": args
+                        "args": args,
+                        "train_steps": train_steps # RESUME: meta
                     }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
                     torch.save(checkpoint, checkpoint_path)
@@ -260,5 +276,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
+    parser.add_argument("--resume", type=str, default=None, # RESUME
+                        help="Path to a .pt checkpoint to continue training")
     args = parser.parse_args()
     main(args)

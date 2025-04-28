@@ -14,6 +14,7 @@ import torch.nn as nn
 import numpy as np
 import math
 from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
+# from flash_attention import FlashAttention as Attention # Attention from flash-attention instead of timm
 
 
 def modulate(x, shift, scale):
@@ -95,6 +96,47 @@ class LabelEmbedder(nn.Module):
 
 
 #################################################################################
+#                                 DiT-MoE Model                                #
+#################################################################################
+class MoE(nn.Module):
+    def __init__(self, hidden_size, expert_size, num_experts=8, k=2):
+        super().__init__()
+        self.num_experts = num_experts
+        self.k = k  # top-k routing
+        self.experts = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(hidden_size, expert_size),
+                nn.GELU(),
+                nn.Linear(expert_size, hidden_size)
+            )
+            for _ in range(num_experts)
+        ])
+        self.router = nn.Linear(hidden_size, num_experts)  # simple linear router
+
+    def forward(self, x):
+        routing_logits = self.router(x)  # (batch, seq_len, num_experts)
+        topk = torch.topk(routing_logits, self.k, dim=-1)
+        topk_values = topk.values.softmax(dim=-1)  # normalize
+        topk_indices = topk.indices
+
+        batch, seq_len, _ = x.shape
+        output = torch.zeros_like(x)
+
+        for k_idx in range(self.k):
+            expert_idx = topk_indices[:, :, k_idx]  # (batch, seq_len)
+            expert_weight = topk_values[:, :, k_idx]  # (batch, seq_len)
+            for expert_id in range(self.num_experts):
+                mask = (expert_idx == expert_id)  # (batch, seq_len)
+                if mask.any():
+                    selected = x[mask]
+                    expert_out = self.experts[expert_id](selected)
+                    expert_out = expert_out * expert_weight[mask].unsqueeze(-1)
+                    output[mask] += expert_out
+
+        return output
+
+
+#################################################################################
 #                                 Core DiT Model                                #
 #################################################################################
 
@@ -104,12 +146,24 @@ class DiTBlock(nn.Module):
     """
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
+        
+        # pop so it doesn't get passed to Attention
+        use_moe = block_kwargs.pop('use_moe', False) # Use MoE if specified in block_kwargs:
+        num_experts = block_kwargs.pop('moe_experts_per_layer', 8) # Number of experts per layer
+        k = block_kwargs.pop('moe_activated_experts', 2) # Number of activated experts per layer
+        
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate="tanh")
-        self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
+        
+        # MoE adaptation:
+        if use_moe:
+            self.mlp = MoE(hidden_size, mlp_hidden_dim, num_experts, k)
+        else:
+            self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
+
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
@@ -158,8 +212,13 @@ class DiT(nn.Module):
         class_dropout_prob=0.1,
         num_classes=1000,
         learn_sigma=True,
+        use_moe: bool = False, # MoE
+        moe_frequency: int = 1, # Replace every # MLP with MoE
+        moe_experts_per_layer: int = 8, # Number of experts per layer
+        moe_activated_experts: int = 2, # Number of activated experts per layer
     ):
         super().__init__()
+        self.use_moe_global = use_moe # MoE
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
@@ -173,9 +232,12 @@ class DiT(nn.Module):
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
 
+        # Add MoE blocks - Insert MoE every 2 blocks:
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, use_moe=self.use_moe_global and (i % moe_frequency == 0), moe_experts_per_layer=moe_experts_per_layer, moe_activated_experts=moe_activated_experts)
+            for i in range(depth)
         ])
+
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights()
 
@@ -248,7 +310,13 @@ class DiT(nn.Module):
         y = self.y_embedder(y, self.training)    # (N, D)
         c = t + y                                # (N, D)
         for block in self.blocks:
-            x = torch.utils.checkpoint.checkpoint(self.ckpt_wrapper(block), x, c)       # (N, T, D)
+            # Attempt to speed up training
+            x = block(x, c)                  # (N, T, D)
+            # (original) Use checkpointing to save memory:
+            # x = torch.utils.checkpoint.checkpoint(
+            #   self.ckpt_wrapper(block), x, c,       # (N, T, D)
+            #   use_reentrant=False
+            # )
         x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
@@ -367,10 +435,20 @@ def DiT_S_4(**kwargs):
 def DiT_S_8(**kwargs):
     return DiT(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
+def DiT_MoE_S_2_8E2A(**kwargs):
+  return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=8, moe_activated_experts=2, **kwargs)
+
+def DiT_MoE_S_2_4E1A(**kwargs):
+  return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=4, moe_activated_experts=1, moe_frequency=2, **kwargs)
+
+
 
 DiT_models = {
-    'DiT-XL/2': DiT_XL_2,  'DiT-XL/4': DiT_XL_4,  'DiT-XL/8': DiT_XL_8,
-    'DiT-L/2':  DiT_L_2,   'DiT-L/4':  DiT_L_4,   'DiT-L/8':  DiT_L_8,
-    'DiT-B/2':  DiT_B_2,   'DiT-B/4':  DiT_B_4,   'DiT-B/8':  DiT_B_8,
-    'DiT-S/2':  DiT_S_2,   'DiT-S/4':  DiT_S_4,   'DiT-S/8':  DiT_S_8,
+  # DiT models:
+  'DiT-XL/2': DiT_XL_2,  'DiT-XL/4': DiT_XL_4,  'DiT-XL/8': DiT_XL_8,
+  'DiT-L/2':  DiT_L_2,   'DiT-L/4':  DiT_L_4,   'DiT-L/8':  DiT_L_8,
+  'DiT-B/2':  DiT_B_2,   'DiT-B/4':  DiT_B_4,   'DiT-B/8':  DiT_B_8,
+  'DiT-S/2':  DiT_S_2,   'DiT-S/4':  DiT_S_4,   'DiT-S/8':  DiT_S_8,
+  # DiT-MoE models:
+  'DiT-MoE-S/2-8E2A': DiT_MoE_S_2_8E2A, 'DiT-MoE-S/2-4E1A': DiT_MoE_S_2_4E1A,
 }
