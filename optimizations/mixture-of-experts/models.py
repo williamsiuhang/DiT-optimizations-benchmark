@@ -99,10 +99,11 @@ class LabelEmbedder(nn.Module):
 #                                 DiT-MoE Model                                #
 #################################################################################
 class MoE(nn.Module):
-    def __init__(self, hidden_size, expert_size, num_experts=8, k=2):
+    def __init__(self, hidden_size, expert_size, num_experts=8, k=2, balance_coef=0.005):
         super().__init__()
         self.num_experts = num_experts
         self.k = k  # top-k routing
+        self.balance_coef = balance_coef
         self.experts = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(hidden_size, expert_size),
@@ -112,9 +113,14 @@ class MoE(nn.Module):
             for _ in range(num_experts)
         ])
         self.router = nn.Linear(hidden_size, num_experts)  # simple linear router
+        # placeholder to stash the last computed balance loss
+        self.last_balance_loss = torch.tensor(0., requires_grad=True)
 
     def forward(self, x):
         routing_logits = self.router(x)  # (batch, seq_len, num_experts)
+        P = routing_logits.softmax(dim=-1) # (batch, seq_len, num_experts)
+
+        # find top-k indices and weights
         topk = torch.topk(routing_logits, self.k, dim=-1)
         topk_values = topk.values.softmax(dim=-1)  # normalize
         topk_indices = topk.indices
@@ -122,6 +128,13 @@ class MoE(nn.Module):
         batch, seq_len, _ = x.shape
         output = torch.zeros_like(x)
 
+        # build indicator tensor I_full: (batch, seq_len, num_experts)
+        I_full = torch.zeros_like(P)
+        for k_idx in range(self.k):
+            expert_idx = topk_indices[:, :, k_idx] # (batch, seq_len)
+            I_full.scatter_add_(2, expert_idx.unsqueeze(-1), torch.ones_like(expert_idx, dtype=P.dtype).unsqueeze(-1))
+
+        # accumulate MoE output
         for k_idx in range(self.k):
             expert_idx = topk_indices[:, :, k_idx]  # (batch, seq_len)
             expert_weight = topk_values[:, :, k_idx]  # (batch, seq_len)
@@ -132,6 +145,13 @@ class MoE(nn.Module):
                     expert_out = self.experts[expert_id](selected)
                     expert_out = expert_out * expert_weight[mask].unsqueeze(-1)
                     output[mask] += expert_out
+
+        # compute expert-level balance loss
+        # P_avg_i = mean_t P(t,i), I_avg_i = mean_t I(t,i)
+        P_avg = P.mean(dim=(0, 1)) # (num_experts,)
+        I_avg = I_full.mean(dim=(0, 1)) # (num_experts,)
+        bal = (I_avg * P_avg).sum() # scalar
+        self.last_balance_loss = self.balance_coef * bal
 
         return output
 
@@ -151,6 +171,7 @@ class DiTBlock(nn.Module):
         use_moe = block_kwargs.pop('use_moe', False) # Use MoE if specified in block_kwargs:
         num_experts = block_kwargs.pop('moe_experts_per_layer', 8) # Number of experts per layer
         k = block_kwargs.pop('moe_activated_experts', 2) # Number of activated experts per layer
+        balance_coef = block_kwargs.pop('moe_balance_coef', 0.005) # Expert-level balance loss coef
         
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
@@ -160,7 +181,7 @@ class DiTBlock(nn.Module):
         
         # MoE adaptation:
         if use_moe:
-            self.mlp = MoE(hidden_size, mlp_hidden_dim, num_experts, k)
+            self.mlp = MoE(hidden_size, mlp_hidden_dim, num_experts, k, balance_coef=balance_coef)
         else:
             self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
 
@@ -195,7 +216,6 @@ class FinalLayer(nn.Module):
         x = self.linear(x)
         return x
 
-
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -216,6 +236,7 @@ class DiT(nn.Module):
         moe_frequency: int = 1, # Replace every # MLP with MoE
         moe_experts_per_layer: int = 8, # Number of experts per layer
         moe_activated_experts: int = 2, # Number of activated experts per layer
+        moe_balance_coef: float = 0.005,
     ):
         super().__init__()
         self.use_moe_global = use_moe # MoE
@@ -232,9 +253,15 @@ class DiT(nn.Module):
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
 
-        # Add MoE blocks - Insert MoE every 2 blocks:
+        # Add MoE blocks
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, use_moe=self.use_moe_global and (i % moe_frequency == 0), moe_experts_per_layer=moe_experts_per_layer, moe_activated_experts=moe_activated_experts)
+            DiTBlock(
+                hidden_size, num_heads, mlp_ratio=mlp_ratio,
+                use_moe=self.use_moe_global and (i % moe_frequency == 0),
+                moe_experts_per_layer=moe_experts_per_layer,
+                moe_activated_experts=moe_activated_experts,
+                moe_balance_coef=moe_balance_coef
+            )
             for i in range(depth)
         ])
 
@@ -242,7 +269,6 @@ class DiT(nn.Module):
         self.initialize_weights()
 
     def initialize_weights(self):
-        # Initialize transformer layers:
         def _basic_init(module):
             if isinstance(module, nn.Linear):
                 torch.nn.init.xavier_uniform_(module.weight)
@@ -250,28 +276,21 @@ class DiT(nn.Module):
                     nn.init.constant_(module.bias, 0)
         self.apply(_basic_init)
 
-        # Initialize (and freeze) pos_embed by sin-cos embedding:
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.x_embedder.num_patches ** 0.5))
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
-        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
         w = self.x_embedder.proj.weight.data
         nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
         nn.init.constant_(self.x_embedder.proj.bias, 0)
 
-        # Initialize label embedding table:
         nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
-
-        # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
-        # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
 
-        # Zero-out output layers:
         nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
         nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
         nn.init.constant_(self.final_layer.linear.weight, 0)
@@ -343,7 +362,6 @@ class DiT(nn.Module):
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
 #################################################################################
-# https://github.com/facebookresearch/mae/blob/main/util/pos_embed.py
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
     """
@@ -436,11 +454,10 @@ def DiT_S_8(**kwargs):
     return DiT(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
 def DiT_MoE_S_2_8E2A(**kwargs):
-  return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=8, moe_activated_experts=2, **kwargs)
+    return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=8, moe_activated_experts=2, moe_frequency=1, moe_balance_coef=0.005, **kwargs)
 
 def DiT_MoE_S_2_4E1A(**kwargs):
-  return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=4, moe_activated_experts=1, moe_frequency=2, **kwargs)
-
+    return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=4, moe_activated_experts=1, moe_frequency=2, moe_balance_coef=0.005, **kwargs)
 
 
 DiT_models = {
