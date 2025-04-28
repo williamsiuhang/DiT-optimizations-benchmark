@@ -1,0 +1,10 @@
+{"models":
+    [{"name": "vanilla-B2",  "type": "DiT-B/2"},
+        {"name": "vanilla-B4",  "type": "DiT-B/4"},
+        {"name":"vanilla-S2", "type": "DiT-S/2" },
+        {"name": "vanilla-S4", "type": "DiT-S/4" },
+        {"name": "vanilla-XS2", "type": "DiT-XS/2"},
+        {"name": "vanilla-XS4", "type": "DiT-XS/4"}
+    ]
+
+}

@@ -4,6 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../external/fast-DiT")))
+
 """
 Sample new images from a pre-trained DiT.
 """
@@ -16,7 +20,7 @@ from diffusers.models import AutoencoderKL
 from download import find_model
 from models import DiT_models
 import argparse
-
+import json
 
 def main(args):
     # Setup PyTorch:
@@ -42,9 +46,22 @@ def main(args):
     model.eval()  # important!
     diffusion = create_diffusion(str(args.num_sampling_steps))
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
+    
+    def mapToOriginalClassIDs(class_labels):
+        with open("data/imagenet256-map-to-original.json", "r") as f:
+            mapping = json.load(f)
+        # Map the class labels to the original class IDs
+        return [mapping[str(label)] for label in class_labels]
 
     # Labels to condition the model with (feel free to change):
-    class_labels = [207, 360, 387, 974, 88, 979, 417, 279]
+    if args.class_labels:
+        class_labels = [int(label) for label in args.class_labels.split(",")]
+    else:
+        class_labels = [157] # Folder name / ID
+        # class_labels = random.sample(range(1, 200), 8)
+        
+    print(f"Class labels: {class_labels}")
+    class_labels = mapToOriginalClassIDs(class_labels) # Map the class labels to their original IDs
 
     # Create sampling noise:
     n = len(class_labels)
@@ -53,7 +70,7 @@ def main(args):
 
     # Setup classifier-free guidance:
     z = torch.cat([z, z], 0)
-    y_null = torch.tensor([1000] * n, device=device)
+    y_null = torch.tensor([args.num_classes] * n, device=device)
     y = torch.cat([y, y_null], 0)
     model_kwargs = dict(y=y, cfg_scale=args.cfg_scale)
 
@@ -65,7 +82,7 @@ def main(args):
     samples = vae.decode(samples / 0.18215).sample
 
     # Save and display images:
-    save_image(samples, "sample.png", nrow=4, normalize=True, value_range=(-1, 1))
+    save_image(samples, args.name + ".png", nrow=4, normalize=True, value_range=(-1, 1))
 
 
 if __name__ == "__main__":
@@ -79,5 +96,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ckpt", type=str, default=None,
                         help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
+    parser.add_argument("--name", type=str, default="sample")
+    parser.add_argument("--class-labels", type=str, default=None,
+                        help="Comma-separated list of class labels to condition the model with")
     args = parser.parse_args()
     main(args)

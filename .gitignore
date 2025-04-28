@@ -1,6 +1,7 @@
 data/*
 !data/readme.md
 !data/imagenet256-map.json
+!data/imagenet256-map-to-original.json
 samples/*
 !samples/readme.md
 results/*
