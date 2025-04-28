@@ -23,7 +23,7 @@ def find_model(model_name):
         return download_model(model_name)
     else:  # Load a custom DiT checkpoint:
         assert os.path.isfile(model_name), f'Could not find DiT checkpoint at {model_name}'
-        checkpoint = torch.load(model_name, map_location=lambda storage, loc: storage)
+        checkpoint = torch.load(model_name, map_location=lambda storage, loc: storage, weights_only=False)
         if "ema" in checkpoint:  # supports checkpoints from train.py
             checkpoint = checkpoint["ema"]
         return checkpoint
@@ -39,7 +39,7 @@ def download_model(model_name):
         os.makedirs('pretrained_models', exist_ok=True)
         web_path = f'https://dl.fbaipublicfiles.com/DiT/models/{model_name}'
         download_url(web_path, 'pretrained_models')
-    model = torch.load(local_path, map_location=lambda storage, loc: storage)
+    model = torch.load(local_path, map_location=lambda storage, loc: storage, weights_only=False)
     return model
 
 
