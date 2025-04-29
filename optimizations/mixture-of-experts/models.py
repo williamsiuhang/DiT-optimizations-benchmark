@@ -459,6 +459,9 @@ def DiT_MoE_S_2_8E2A(**kwargs):
 def DiT_MoE_S_2_4E1A(**kwargs):
     return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, use_moe=True, moe_experts_per_layer=4, moe_activated_experts=1, moe_frequency=2, moe_balance_coef=0.005, **kwargs)
 
+def DiT_MoE_XS_2_8E2A(**kwargs):
+    return DiT(depth=6, hidden_size=256, patch_size=2, num_heads=4, use_moe=True, moe_experts_per_layer=8, moe_activated_experts=2, moe_frequency=1, moe_balance_coef=0.005, **kwargs)
+
 
 DiT_models = {
   # DiT models:
@@ -468,4 +471,5 @@ DiT_models = {
   'DiT-S/2':  DiT_S_2,   'DiT-S/4':  DiT_S_4,   'DiT-S/8':  DiT_S_8,
   # DiT-MoE models:
   'DiT-MoE-S/2-8E2A': DiT_MoE_S_2_8E2A, 'DiT-MoE-S/2-4E1A': DiT_MoE_S_2_4E1A,
+  'DiT-MoE-XS/2-8E2A': DiT_MoE_XS_2_8E2A,
 }
