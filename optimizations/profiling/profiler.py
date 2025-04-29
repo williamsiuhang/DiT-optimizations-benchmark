@@ -15,7 +15,7 @@ def main(args):
     else:
         device = torch.device('cpu')
     
-    output_file = args.output_file
+    output_model = args.output_model
     
     # Model file has structure:
     # {models: [{name: <identifying name>, type: <"DiT-S/2", "S/4", etc>, ...<your favorite attributes>}]}
