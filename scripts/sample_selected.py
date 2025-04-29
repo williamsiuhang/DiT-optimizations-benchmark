@@ -1,19 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-
-# Example usage::
-# python sample_selected.py --model "DiT-S/2" --num-classes 200 --ckpt path_to_checkpoint --name samples/filename
-
-
 import sys
 import os
-#TODO: maybe resolve between local modules in optimizations/ and git submodules in external/
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "external/fast-DiT")))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "optimizations/base")))
+
+############################################
+# Replace your path with the correct method:
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../optimizations/base")))
+############################################
+
 """
 Sample new images from a pre-trained DiT.
 """
