@@ -11,8 +11,9 @@
 
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "external/fast-DiT")))
-
+#TODO: maybe resolve between local modules in optimizations/ and git submodules in external/
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "external/fast-DiT")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "optimizations/base")))
 """
 Sample new images from a pre-trained DiT.
 """
