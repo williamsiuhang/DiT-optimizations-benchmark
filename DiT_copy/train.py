@@ -247,6 +247,12 @@ def main(args):
 
         # Save epoch DiT checkpoint:
         if rank == 0:
+            # in case of some version mismatch
+            if hasattr(model, 'module'):
+                st_dict = model.module.state_dict()
+            else:
+                st_dict = model.state_dict()
+
             checkpoint = {
                 "model": model.module.state_dict(),
                 "ema": ema.state_dict(),
