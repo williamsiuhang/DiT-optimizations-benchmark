@@ -9,8 +9,8 @@ A minimal training script for DiT using PyTorch DDP.
 """
 import torch
 # the first flag below was False when we tested this script but True makes A100 training a lot faster:
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
@@ -230,7 +230,6 @@ def main(args):
                 start_time = time()
 
             # Save DiT checkpoint:
-            '''
             if train_steps % args.ckpt_every == 0 and train_steps > 0:
                 if rank == 0:
                     checkpoint = {
@@ -243,26 +242,7 @@ def main(args):
                     torch.save(checkpoint, checkpoint_path)
                     logger.info(f"Saved checkpoint to {checkpoint_path}")
                 dist.barrier()
-            '''
 
-        # Save epoch DiT checkpoint:
-        if rank == 0:
-            # in case of some version mismatch
-            if hasattr(model, 'module'):
-                st_dict = model.module.state_dict()
-            else:
-                st_dict = model.state_dict()
-
-            checkpoint = {
-                "model": model.module.state_dict(),
-                "ema": ema.state_dict(),
-                "opt": opt.state_dict(),
-                "args": args
-            }
-            checkpoint_path = f"{checkpoint_dir}/{epoch:03d}.pt"
-            torch.save(checkpoint, checkpoint_path)
-            logger.info(f"Saved checkpoint to {checkpoint_path}")
-        dist.barrier()
     model.eval()  # important! This disables randomized embedding dropout
     # do any sampling/FID calculation/etc. with ema (or model) in eval mode ...
 
@@ -282,8 +262,8 @@ if __name__ == "__main__":
     parser.add_argument("--global-batch-size", type=int, default=256)
     parser.add_argument("--global-seed", type=int, default=0)
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
-    parser.add_argument("--num-workers", type=int, default=1)
+    parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument("--ckpt-every", type=int, default=10000)
+    parser.add_argument("--ckpt-every", type=int, default=50_000)
     args = parser.parse_args()
     main(args)
