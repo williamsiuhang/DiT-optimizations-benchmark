@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH -J S2-fgq                       # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH --gres=gpu:H200:2
+#SBATCH --cpus-per-task 8
+#SBATCH --mem-per-gpu=8G                # Memory per core  
+#SBATCH --tmp=5G                      
+#SBATCH -t 4:00:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+
+cd ${TMPDIR}
+scp -r pganesan8@login-ice.pace.gatech.edu:~/scratch/imnet_feat.tar.gz .
+tar -xzf imnet_feat.tar.gz
+echo "file transfer done"
+
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+# accelerate launch --mixed_precision fp16 att_train.py --model DiT-S/2 --feature-path /${TMPDIR}/imnet_feat --results-dir ~/scratch/results --num-classes 200 --log-every 1000 --ckpt-every 10000 --num-workers 1 --med-dim 4 --att med --resume ~/scratch/results/016-S2-ma4/checkpoints/0160000.pt
+# accelerate launch --mixed_precision fp16 train.py --model DiT-B/2 --feature-path /${TMPDIR}/imnet_feat --results-dir ~/scratch/results --num-classes 200 --log-every 1000 --ckpt-every 10000 --num-workers 1 --epochs 480
+# accelerate launch --multi_gpu --num_processes 2 --mixed_precision fp16 att_train.py --model DiT-S/2 --feature-path /${TMPDIR}/imnet_feat --results-dir ~/scratch/results --num-classes 200 --ckpt-every 10000 --att fgq --resume ~/scratch/results/034-DiT-S-2--att/checkpoints/0100000.pt

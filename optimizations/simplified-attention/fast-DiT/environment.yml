@@ -1,0 +1,16 @@
+name: fast-DiT
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python >= 3.8
+  - pip
+  - pip:
+    - timm
+    - diffusers
+    - accelerate
+    - torch
+    - torchvision
+    - pillow
+    - fvcore
+    - pandas

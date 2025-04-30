@@ -1,0 +1,11 @@
+#!/bin/bash
+#SBATCH -J PG-samps                        # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 1
+#SBATCH --mem-per-gpu=8G                        # Memory per core
+#SBATCH -t 00:15:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+
+
+ srun python my_profiler.py -o ~/scratch/results/model_stats/att_model_flops -f ~/scratch/results/model_stats/model_types_att.json

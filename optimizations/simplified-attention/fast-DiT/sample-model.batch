@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH -J PG-activations                        # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 1 -C HX00
+#SBATCH --mem-per-gpu=8G                        # Memory per core
+#SBATCH -t 01:00:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+
+# srun python att-sample.py --model DiT-XS/2 --image-size 256 --name "xs2-300k-med-4" --ckpt ~/scratch/results/007-XS2-ma4/checkpoints/0300000.pt --num-classes 200 --ema --att med --med-dim 4
+# srun python att-sample.py --model DiT-S/2 --image-size 256 --name "s2-200k-med-4" --ckpt ~/scratch/results/023-DiT-S-2--att/checkpoints/0040000.pt --num-classes 200 --att med --med-dim 16 --ema
+# srun python att-sample.py --model DiT-S/2 --image-size 256 --name "s2-200k-med-16" --ckpt ~/scratch/results/022-S2-ma16/checkpoints/0200000.pt --num-classes 200 --att med --med-dim 16 --ema
+# srun python att-sample.py --model DiT-S/2 --image-size 256 --name "s2-200k-fmq" --ckpt ~/scratch/results/032-DiT-S-2--att/checkpoints/0200000.pt --num-classes 200 --att fmq --ema
+# srun python att_sample_selected.py --model DiT-S/2 --image-size 256 --name "s2-200k-shal-final" --ckpt ~/scratch/results/key_results/s2-shal-200k.pt --num-classes 200 --att shallow
+# srun python att_sample_selected.py --model DiT-S/2 --image-size 256 --name "s2-200k-ma4-final" --ckpt ~/scratch/results/key_results/s2-ma4-200k.pt --num-classes 200 --att med --med-dim 4
+# srun python att_sample_selected.py --model DiT-S/2 --image-size 256 --name "s2-200k-ma16-final" --ckpt ~/scratch/results/key_results/s2-ma16-200k.pt --num-classes 200 --att med --med-dim 16
+# srun python att_sample_selected.py --model DiT-S/2 --image-size 256 --name "s2-200k-fmq-final" --ckpt ~/scratch/results/key_results/s2-fmq-200k.pt --num-classes 200 --att fmq
+srun python att_sample_selected.py --model DiT-S/2 --image-size 256 --name "s2-200k-fgq-final" --ckpt ~/scratch/results/key_results/s2-fgq-200k.pt --num-classes 200 --att fgq

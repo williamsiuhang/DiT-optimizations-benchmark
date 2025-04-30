@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH -J S2-npz                       # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 1 -C HX00
+#SBATCH --cpus-per-task 8
+#SBATCH --mem-per-gpu=8G                # Memory per core  
+#SBATCH --tmp=5G                      
+#SBATCH -t 03:00:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+# srun python att_sample_ddp.py --model DiT-S/2 --num-fid-samples 10000 --ckpt ~/scratch/results/key_results/s2-shal-200k.pt --sample-dir ~/scratch/img_out --att shallow --cfg-scale 4.0 --num-classes 200
+# srun python att_sample_ddp.py --model DiT-S/2 --num-fid-samples 10000 --ckpt ~/scratch/results/key_results/s2-ma4-200k.pt --sample-dir ~/scratch/img_out --att med --med-dim 4 --cfg-scale 4.0 --num-classes 200
+# srun python att_sample_ddp.py --model DiT-S/2 --num-fid-samples 10000 --ckpt ~/scratch/results/key_results/s2-ma16-200k.pt --sample-dir ~/scratch/img_out --att med --med-dim 16 --cfg-scale 4.0 --num-classes 200
+ srun python att_sample_ddp.py --model DiT-S/2 --num-fid-samples 10000 --ckpt ~/scratch/results/key_results/s2-fmq-200k.pt --sample-dir ~/scratch/img_out --att fmq --cfg-scale 4.0 --num-classes 200
+# srun python make_imnet_npz.py --sample_dir ~/scratch/imagenet --out_file ~/scratch/img_out/NPZ_files/imnet10k --num 10000
+ srun python att_sample_ddp.py --model DiT-S/2 --num-fid-samples 10000 --ckpt ~/scratch/results/key_results/s2-fgq-200k.pt --sample-dir ~/scratch/img_out --att fgq --cfg-scale 4.0 --num-classes 200

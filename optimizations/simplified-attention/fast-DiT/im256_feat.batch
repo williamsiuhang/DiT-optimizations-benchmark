@@ -1,0 +1,10 @@
+#!/bin/bash
+#SBATCH -J PG-B8                    # Job name
+#SBATCH -N 1                                     # Number of cores required
+#SBATCH -G 1 
+#SBATCH --mem-per-gpu=8G                        # Memory per core
+#SBATCH -t 08:00:00                             # Duration of the job (Ex: 15 mins)
+#SBATCH -o ./slurm_outs/slurm-%j.out            # Combined output and error messages file
+cd $SLURM_SUBMIT_DIR                            # Change to working directory
+
+torchrun --nnodes=1 --nproc_per_node=1 my_extract_features.py --data-path /home/hice1/pganesan8/scratch/imagenet --features-path /home/hice1/pganesan8/scratch/imnet_feat

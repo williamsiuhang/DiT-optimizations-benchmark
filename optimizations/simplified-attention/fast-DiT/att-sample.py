@@ -12,11 +12,20 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 from torchvision.utils import save_image
 from diffusion import create_diffusion
-from diffusers import AutoencoderKL
-from download import find_model
-from models import DiT_models
+from diffusers.models import AutoencoderKL # type: ignore
+from att_models import DiT_models
 import argparse
+import os
 
+def find_model(model_name):
+    assert os.path.isfile(model_name), f'Could not find DiT checkpoint at {model_name}'
+    checkpoint = torch.load(model_name, map_location=lambda storage, loc: storage, weights_only=False)
+    if "ema" in checkpoint:  # supports checkpoints from train.py
+        if args.ema:
+            checkpoint = checkpoint["ema"]
+        else:
+            checkpoint = checkpoint["model"]
+    return checkpoint
 
 def main(args):
     # Setup PyTorch:
@@ -33,7 +42,9 @@ def main(args):
     latent_size = args.image_size // 8
     model = DiT_models[args.model](
         input_size=latent_size,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        att = args.att,
+        mediator_dim = args.med_dim
     ).to(device)
     # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
     ckpt_path = args.ckpt or f"DiT-XL-2-{args.image_size}x{args.image_size}.pt"
@@ -41,10 +52,10 @@ def main(args):
     model.load_state_dict(state_dict)
     model.eval()  # important!
     diffusion = create_diffusion(str(args.num_sampling_steps))
-    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
+    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device) # type: ignore
 
     # Labels to condition the model with (feel free to change):
-    class_labels = [207, 360, 387, 974, 88, 979, 417, 279]
+    class_labels = [25, 157, 100, 125, 154, 75, 60, 188]
 
     # Create sampling noise:
     n = len(class_labels)
@@ -62,10 +73,10 @@ def main(args):
         model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
     )
     samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-    samples = vae.decode(samples / 0.18215).sample
+    samples = vae.decode(samples / 0.18215).sample # type: ignore
 
     # Save and display images:
-    save_image(samples, "sample.png", nrow=4, normalize=True, value_range=(-1, 1))
+    save_image(samples, args.name + ".png", nrow=4, normalize=True, value_range=(-1, 1))
 
 
 if __name__ == "__main__":
@@ -79,5 +90,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ckpt", type=str, default=None,
                         help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
+    parser.add_argument("--ema", action="store_true")
+    parser.add_argument("--name", type=str, default="sample")
+    parser.add_argument("--att", type=str, default=None)
+    parser.add_argument("--med-dim", type=int, default=4)
     args = parser.parse_args()
     main(args)
