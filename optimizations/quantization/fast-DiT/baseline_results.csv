@@ -1,0 +1,5 @@
+name,type,params_M,model_size_MB,flops_G,peak_mem_GB,throughput_it_per_s
+vanilla-S2,DiT-S/2,32.656,130.625,6.066,0.281,9.38
+vanilla-S4,DiT-S/4,32.638,130.551,1.415,0.447,7.65
+vanilla-XS2,DiT-XS/2,7.494,29.975,1.418,0.389,8.53
+vanilla-XS4,DiT-XS/4,7.481,29.926,0.321,0.431,7.63
