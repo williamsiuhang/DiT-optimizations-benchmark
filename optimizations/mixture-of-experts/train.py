@@ -28,7 +28,7 @@ import logging
 import os
 from accelerate import Accelerator, DistributedDataParallelKwargs
 
-from models import DiT_models
+from models import DiT_models, MoE
 from diffusion import create_diffusion
 from diffusers.models import AutoencoderKL
 
@@ -214,15 +214,28 @@ def main(args):
             y = y.squeeze(dim=1)
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
             model_kwargs = dict(y=y)
+
+            # compute the per‐sample reconstruction loss
             loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
-            loss = loss_dict["loss"].mean()
+            recon_loss = loss_dict["loss"].mean()
+
+            # ——— aggregate all MoE expert‐level balance losses ———
+            balance_loss = 0.0
+            blocks = model.module.blocks if hasattr(model, "module") else model.blocks
+            for block in blocks:
+                if isinstance(block.mlp, MoE):
+                    balance_loss = balance_loss + block.mlp.last_balance_loss
+
+            # final training objective
+            loss = recon_loss + balance_loss
+
             opt.zero_grad()
             accelerator.backward(loss)
             opt.step()
             update_ema(ema, model)
 
             # Log loss values:
-            running_loss += loss.item()
+            running_loss += recon_loss.item()
             log_steps += 1
             train_steps += 1
             if train_steps % args.log_every == 0:
@@ -234,7 +247,8 @@ def main(args):
                 avg_loss = torch.tensor(running_loss / log_steps, device=device)
                 avg_loss = avg_loss.item() / accelerator.num_processes
                 if accelerator.is_main_process:
-                    logger.info(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
+                    logger.info(f"(step={train_steps:07d}) Recon Loss: {avg_loss:.4f}, "
+                                f"Balance Loss: {balance_loss.item():.4f}, Steps/Sec: {steps_per_sec:.2f}")
                 # Reset monitoring variables:
                 running_loss = 0
                 log_steps = 0
@@ -276,7 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
-    parser.add_argument("--resume", type=str, default=None, # RESUME
+    parser.add_argument("--resume", type=str, default=None,
                         help="Path to a .pt checkpoint to continue training")
     args = parser.parse_args()
     main(args)
